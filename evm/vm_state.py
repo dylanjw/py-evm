@@ -350,7 +350,7 @@ class BaseTransactionExecutor:
     def execute_transaction(self, transaction):
         message = self.run_pre_computation(transaction)
         computation = self.run_computation(transaction, message)
-        return self.run_post_computation(transaction, message, computation)
+        return self.run_post_computation(transaction, computation)
 
     def run_pre_computation(self, transaction):
         raise NotImplementedError()
@@ -358,5 +358,5 @@ class BaseTransactionExecutor:
     def run_computation(self, transaction, message):
         raise NotImplementedError()
 
-    def run_post_computation(self, transaction, message, computation):
+    def run_post_computation(self, transaction, computation):
         raise NotImplementedError()
