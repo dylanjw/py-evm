@@ -9,6 +9,7 @@ from evm.chains.ropsten import ROPSTEN_GENESIS_HEADER
 from evm.estimators.gas import binary_gas_search_1000_tolerance
 from evm.exceptions import (
     TransactionNotFound,
+    ValidationError,
 )
 from evm.vm.forks.frontier.blocks import FrontierBlock
 
@@ -142,6 +143,56 @@ def test_estimate_gas(
         assert chain.estimate_gas(tx) == expected
         # these are long, so now that we know the exact numbers let's skip the repeat test
         # assert chain.estimate_gas(tx, chain.get_canonical_head()) == expected
+
+
+def fill_block(chain, from_, key, gas, data):
+    recipient = decode_hex('0xa94f5374fce5edbc8e2a8697c15331677e6ebf0c')
+    amount = 100
+
+    assert chain.get_vm().state.gas_used == 0
+
+    while True:
+        vm = chain.get_vm()
+        tx = new_transaction(vm, from_, recipient, amount, key, gas=gas, data=data)
+        try:
+            computation = chain.apply_transaction(tx)
+        except ValidationError:
+            break
+
+    assert chain.get_vm().state.gas_used > 0
+
+
+@pytest.mark.parametrize('is_pending', [True, False])
+def test_estimate_gas_on_full_block(chain, is_pending, funded_address_private_key, funded_address):
+
+    def estimation_txn(chain, from_, from_key, data):
+        to = decode_hex('0xa94f5374fce5edbc8e2a8697c15331677e6ebf0c')
+        gas = chain.header.gas_limit
+        amount = 200
+        vm = chain.get_vm()
+        return new_transaction(vm, from_, to, amount, from_key, gas=gas, data=data)
+
+    from_ = funded_address
+    from_key = funded_address_private_key
+    garbage_data = b"""
+        fill up the block much faster because this transaction contains a bunch of extra
+        garbage_data, which doesn't add to execution time, just the gas costs
+    """ * 30
+    gas = 375000
+
+    # fill the canonical head
+    fill_block(chain, from_, from_key, gas, garbage_data)
+    block = chain.import_block(chain.get_vm().block)
+    next_canonical_tx = estimation_txn(chain, from_, from_key, data=garbage_data * 2)
+
+    # fill the pending block
+    fill_block(chain, from_, from_key, gas, garbage_data)
+    next_pending_tx = estimation_txn(chain, from_, from_key, data=garbage_data * 2)
+
+    if is_pending:
+        assert chain.estimate_gas(next_pending_tx, chain.header) == 56088
+    else:
+        assert chain.estimate_gas(next_canonical_tx) == 56088
 
 
 def test_canonical_chain(valid_chain):
