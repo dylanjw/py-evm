@@ -451,9 +451,10 @@ class VM(Configurable):
                 last_block_hash=block_header.parent_hash,
                 db=chaindb,
             )
-
         execution_context = ExecutionContext.from_block_header(block_header, prev_hashes)
-        receipts = self.block.get_receipts(self.chaindb)
+        block = self.get_block_by_header(block_header, chaindb)
+        receipts = block.get_receipts(chaindb)
+
         return self.get_state_class()(
             chaindb,
             execution_context=execution_context,
